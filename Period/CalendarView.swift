@@ -22,6 +22,7 @@ struct CalendarView: View {
     @State private var entries: [Date: DayEntry] = [:]
     @State private var showCycleInfo = false
     @State private var showPredictions = false
+//    @Environment(\.colorScheme) var colorScheme
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -304,73 +305,6 @@ struct CalendarView: View {
         }
     }
     
-    func periodStartDates() -> [Date] {
-        let periodDates = entries
-            .filter { $0.value.hasPeriod }
-            .map { normalizedDate($0.key) }
-            .sorted()
-
-        guard !periodDates.isEmpty else { return [] }
-
-        var starts: [Date] = []
-        for i in 0..<periodDates.count {
-            let current = periodDates[i]
-
-            if i == 0 {
-                starts.append(current)
-            } else {
-                let previous = periodDates[i - 1]
-                let difference = calendar.dateComponents([.day], from: previous, to: current).day ?? 0
-
-                // treat a date as a new period start if it is not part of the same period block
-                if difference > 1 {
-                    starts.append(current)
-                }
-            }
-        }
-
-        return starts
-    }
-    
-    func averageCycleLength() -> Int? {
-        let starts = periodStartDates()
-        guard starts.count >= 2 else { return nil }
-
-        var gaps: [Int] = []
-
-        for i in 1..<starts.count {
-            let days = calendar.dateComponents([.day], from: starts[i - 1], to: starts[i]).day ?? 0
-            if days >= 15 && days <= 60 {
-                gaps.append(days)
-            }
-        }
-
-        guard !gaps.isEmpty else { return nil }
-        return gaps.reduce(0, +) / gaps.count
-    }
-    
-    func predictedNextPeriodStart() -> Date? {
-        guard
-            let cycleLength = averageCycleLength(),
-            let lastStart = periodStartDates().last
-        else {
-            return nil
-        }
-
-        return calendar.date(byAdding: .day, value: cycleLength, to: lastStart)
-    }
-    
-    func predictedOvulationDate() -> Date? {
-        guard let nextPeriod = predictedNextPeriodStart() else { return nil }
-        return calendar.date(byAdding: .day, value: -14, to: nextPeriod)
-    }
-    
-    func shortDateString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter.string(from: date)
-    }
-    
 }
 
 
@@ -603,6 +537,11 @@ struct StickyNoteEditorView: View {
                 TextEditor(text: $existingEntry.note)
                     .frame(height: 120)
                     .padding(8)
+//                if colorScheme == .dark{
+//                    .background(Color(.systemBackground))
+//                } else {
+//                    
+//                }
                     .background(Color(.systemBackground))
                     .cornerRadius(10)
                     .overlay(
