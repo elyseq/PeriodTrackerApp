@@ -7,6 +7,14 @@
 
 import SwiftUI
 
+#if canImport(UIKit)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif
+
 struct CalendarView: View {
     @State private var displayedMonth = Date()
     @State private var selectedDate: Date? = nil
@@ -102,6 +110,7 @@ struct CalendarView: View {
                     date: selectedDate,
                     existingEntry: bindingForDate(selectedDate),
                     onClose: {
+                        hideKeyboard()
                         showingEditor = false
                     }
                 )
@@ -109,13 +118,6 @@ struct CalendarView: View {
                 .transition(.scale)
                 .zIndex(1)
             }
-            
-//            if showCycleInfo {
-//                
-//                CycleInfoEditorView(onClose: {
-//                    showCycleInfo = false
-//                })
-//            }
             
             if showCycleInfo {
                 Color.black.opacity(0.25)
@@ -126,6 +128,7 @@ struct CalendarView: View {
 
                 CycleInfoEditorView(
                     onClose: {
+                        hideKeyboard()
                         showCycleInfo = false
                     }
                 )
@@ -141,6 +144,7 @@ struct CalendarView: View {
                 PredictionEditorView(
                     prediction: prediction,
                     onClose: {
+                        hideKeyboard()
                         showPredictions = false
                     }
                 )
@@ -477,98 +481,194 @@ struct StickyNoteEditorView: View {
         "Anxiety",
     ]
 
+      //non-scrolling sticky note editor
+//    var body: some View {
+//        VStack(alignment: .leading, spacing: 16) {
+//            HStack {
+//                Text(formattedDate(date))
+//                    .font(.headline)
+//
+//                Spacer()
+//
+//                Button("Clear Day") {
+//                    existingEntry.note = ""
+//                    existingEntry.symptoms.removeAll()
+//                    existingEntry.hasPeriod = false
+//                }
+//                .fontWeight(.semibold)
+//                .tint(.red)
+//            }
+//
+//            Text("Notes")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//
+//            TextEditor(text: $existingEntry.note)
+//                .frame(height: 120)
+//                .padding(8)
+//                .background(Color.white.opacity(0.75))
+//                .cornerRadius(10)
+//                .overlay(
+//                    RoundedRectangle(cornerRadius: 10)
+//                        .stroke(Color.purple.opacity(0.35), lineWidth: 1)
+//                )
+//            
+//            Text("Period")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//
+//            Button {
+//                existingEntry.hasPeriod.toggle()
+//            } label: {
+//                HStack {
+//                    Image(systemName: existingEntry.hasPeriod ? "drop.fill" : "drop")
+//                    Text(existingEntry.hasPeriod ? "Period Logged" : "Mark as Period Day")
+//                        .fontWeight(.semibold)
+//                }
+//                .frame(maxWidth: .infinity)
+//                .padding(.vertical, 12)
+//                .background(existingEntry.hasPeriod ? Color.red.opacity(0.3) : Color.white.opacity(0.75))
+//                .foregroundColor(.primary)
+//                .cornerRadius(12)
+//            }
+//            .buttonStyle(.plain)
+//
+//            Text("Symptoms")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//
+//            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
+//                ForEach(symptomOptions, id: \.self) { symptom in
+//                    Button {
+//                        toggleSymptom(symptom)
+//                    } label: {
+//                        Text(symptom)
+//                            .font(.subheadline)
+//                            .frame(maxWidth: .infinity)
+//                            .padding(.vertical, 10)
+//                            .background(existingEntry.symptoms.contains(symptom) ? Color.pink.opacity(0.35) : Color.white.opacity(0.75))
+//                            .foregroundColor(.primary)
+//                            .cornerRadius(10)
+//                    }
+//                    .buttonStyle(.plain)
+//                }
+//            }
+//
+//            Button {
+//                onClose()
+//
+//            } label: {
+//                Text("Done")
+//                    .frame(maxWidth: .infinity)
+//                    .padding()
+//                    .background(Color.red.opacity(0.15))
+//                    .cornerRadius(12)
+//            }
+//            .buttonStyle(.plain)
+//
+//        }
+//        .padding(20)
+//        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
+//        .background(Color.pink.brightness(0.8))
+//        //.background(Color.brown.brightness(0.2)) //color for pop-up
+//        .cornerRadius(18)
+//        .shadow(radius: 12)
+//        .frame(maxWidth: 350)
+//    }
+    
+    
+    //scrolling sticky note editor
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(formattedDate(date))
-                    .font(.headline)
-
-                Spacer()
-
-                Button("Clear Day") {
-                    existingEntry.note = ""
-                    existingEntry.symptoms.removeAll()
-                    existingEntry.hasPeriod = false
-                }
-                .fontWeight(.semibold)
-                .tint(.red)
-            }
-
-            Text("Notes")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
-            TextEditor(text: $existingEntry.note)
-                .frame(height: 120)
-                .padding(8)
-                .background(Color.white.opacity(0.75))
-                .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.purple.opacity(0.35), lineWidth: 1)
-                )
-            
-            Text("Period")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
-            Button {
-                existingEntry.hasPeriod.toggle()
-            } label: {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Image(systemName: existingEntry.hasPeriod ? "drop.fill" : "drop")
-                    Text(existingEntry.hasPeriod ? "Period Logged" : "Mark as Period Day")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(existingEntry.hasPeriod ? Color.red.opacity(0.3) : Color.white.opacity(0.75))
-                .foregroundColor(.primary)
-                .cornerRadius(12)
-            }
-            .buttonStyle(.plain)
+                    Text(formattedDate(date))
+                        .font(.headline)
 
-            Text("Symptoms")
-                .font(.subheadline)
-                .fontWeight(.semibold)
+                    Spacer()
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
-                ForEach(symptomOptions, id: \.self) { symptom in
-                    Button {
-                        toggleSymptom(symptom)
-                    } label: {
-                        Text(symptom)
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(existingEntry.symptoms.contains(symptom) ? Color.pink.opacity(0.35) : Color.white.opacity(0.75))
-                            .foregroundColor(.primary)
-                            .cornerRadius(10)
+                    Button("Clear Day") {
+                        existingEntry.note = ""
+                        existingEntry.symptoms.removeAll()
+                        existingEntry.hasPeriod = false
                     }
-                    .buttonStyle(.plain)
+                    .fontWeight(.semibold)
+                    .tint(.red)
                 }
-            }
 
-            Button {
-                onClose()
+                Text("Notes")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
 
-            } label: {
-                Text("Done")
+                TextEditor(text: $existingEntry.note)
+                    .frame(height: 120)
+                    .padding(8)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.purple.opacity(0.35), lineWidth: 1)
+                    )
+
+                Text("Period")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Button {
+                    existingEntry.hasPeriod.toggle()
+                } label: {
+                    HStack {
+                        Image(systemName: existingEntry.hasPeriod ? "drop.fill" : "drop")
+                        Text(existingEntry.hasPeriod ? "Period Logged" : "Mark as Period Day")
+                            .fontWeight(.semibold)
+                    }
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red.opacity(0.15))
+                    .padding(.vertical, 12)
+                    .background(existingEntry.hasPeriod ? Color.red.opacity(0.3) : Color(.secondarySystemBackground))
+                    .foregroundColor(.primary)
                     .cornerRadius(12)
-            }
-            .buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
 
+                Text("Symptoms")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 10) {
+                    ForEach(symptomOptions, id: \.self) { symptom in
+                        Button {
+                            toggleSymptom(symptom)
+                        } label: {
+                            Text(symptom)
+                                .font(.subheadline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(existingEntry.symptoms.contains(symptom) ? Color.pink.opacity(0.35) : Color(.secondarySystemBackground))
+                                .foregroundColor(.primary)
+                                .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Button {
+                    hideKeyboard()
+                    onClose()
+                } label: {
+                    Text("Done")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red.opacity(0.15))
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
         }
-        .padding(20)
-        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
-        .background(Color.pink.brightness(0.8))
-        //.background(Color.brown.brightness(0.2)) //color for pop-up
+        .frame(maxWidth: 350, maxHeight: 500)
+        .background(Color(.systemGroupedBackground))
         .cornerRadius(18)
         .shadow(radius: 12)
-        .frame(maxWidth: 350)
     }
 
     func toggleSymptom(_ symptom: String) {
@@ -704,6 +804,7 @@ struct CycleInfoEditorView: View {
             .padding(20)
         }
         .background(Color.pink.brightness(0.8))
+        //.background(Color(.secondarySystemBackground)) //good setting for dark mode
         .cornerRadius(18)
         .shadow(radius: 12)
         .frame(maxWidth: 350, maxHeight: 500)
@@ -920,16 +1021,17 @@ struct PredictionEditorView: View {
                 } else {
                     Text("Log at least 2 periods to see predictions.")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding()
-                        //.frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white.opacity(0.7))
-                        .cornerRadius(14)
+                        //.background(Color.white.opacity(0.7)) // 2/3 shapes around text
+                        .background(Color.pink.brightness(0.8))
+//                        .background(Color(.secondarySystemBackground)) //good setting for dark mode
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-            .background(Color.white.opacity(0.7))
+//            .background(Color.white.opacity(0.7)) // 2/3 shapes around text
+            .background(Color.pink.brightness(0.8))
+//            .background(Color(.secondarySystemBackground)) //good setting for dark mode
             .cornerRadius(14)
 
 //            if let nextPeriod = prediction.nextPeriodStart {
@@ -973,6 +1075,7 @@ struct PredictionEditorView: View {
         }
         .padding(20)
         .background(Color.pink.brightness(0.8))
+//        .background(Color(.secondarySystemBackground)) //good setting for dark mode // 1/3 shape around text
         .cornerRadius(18)
         .shadow(radius: 12)
         .frame(maxWidth: 350)
