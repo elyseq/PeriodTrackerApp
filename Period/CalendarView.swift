@@ -8,69 +8,6 @@
 import SwiftUI
 
 struct CalendarView: View {
-//    @State private var currentMonth = Date()
-//        let calendar = Calendar.current
-//
-//        let columns = Array(repeating: GridItem(.flexible()), count: 7)
-//        let weekdaySymbols = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-//
-//        var body: some View {
-//            VStack {
-//                Text(monthYearString(from: currentMonth))
-//                    .font(.title)
-//                    .padding()
-//
-//                LazyVGrid(columns: columns) {
-//                    ForEach(weekdaySymbols, id: \.self) { day in
-//                        Text(day)
-//                            .fontWeight(.bold)
-//                    }
-//
-//                    ForEach(daysInMonth(), id: \.self) { value in
-//                        if value == 0 {
-//                            Text("")
-//                                .frame(height: 40)
-//                        } else {
-//                            Text("\(value)")
-//                                .frame(maxWidth: .infinity, minHeight: 120)
-//                                .background(Color.yellow.opacity(0.15))
-//                                .cornerRadius(10)
-//                            //if selected, turn background pink
-//                        }
-//                    }
-//                }
-//                .padding()
-//            }
-//        }
-//
-//        func monthYearString(from date: Date) -> String {
-//            let formatter = DateFormatter()
-//            formatter.dateFormat = "MMMM yyyy"
-//            return formatter.string(from: date)
-//        }
-//
-//        func daysInMonth() -> [Int] {
-//            guard
-//                let monthRange = calendar.range(of: .day, in: .month, for: currentMonth),
-//                let firstOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth))
-//            else {
-//                return []
-//            }
-//
-//            let firstWeekday = calendar.component(.weekday, from: firstOfMonth)
-//
-//            var days: [Int] = []
-//
-//            for _ in 1..<firstWeekday {
-//                days.append(0)
-//            }
-//
-//            for day in monthRange {
-//                days.append(day)
-//            }
-//
-//            return days
-//        }
     @State private var displayedMonth = Date()
     @State private var selectedDate: Date? = nil
     @State private var showingEditor = false
@@ -83,6 +20,7 @@ struct CalendarView: View {
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
     private let weekdaySymbols = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    private let storageKey = "savedPeriodEntries"
 
     var body: some View {
         ZStack {
@@ -158,6 +96,13 @@ struct CalendarView: View {
             }
         }
         .animation(.easeInOut, value: showingEditor)
+        .onAppear {
+            loadEntries()
+        }
+        .onChange(of: entries) {
+            saveEntries()
+        }
+        
     }
 
     // MARK: - Header
@@ -267,14 +212,44 @@ struct CalendarView: View {
             }
         )
     }
+
+    func saveEntries() {
+        let savedArray = entries.map { SavedDayEntry(date: $0.key, entry: $0.value) }
+
+        do {
+            let data = try JSONEncoder().encode(savedArray)
+            UserDefaults.standard.set(data, forKey: storageKey)
+        } catch {
+            print("Failed to save entries: \(error)")
+        }
+    }
+
+    func loadEntries() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return }
+
+        do {
+            let savedArray = try JSONDecoder().decode([SavedDayEntry].self, from: data)
+            entries = Dictionary(uniqueKeysWithValues: savedArray.map { ($0.date, $0.entry) })
+        } catch {
+            print("Failed to load entries: \(error)")
+        }
+    }
+    
 }
+
+
 
 // MARK: - Day Entry Model
 
-struct DayEntry: Equatable {
+struct DayEntry: Equatable, Codable {
     var note: String = ""
     var symptoms: Set<String> = []
     var hasPeriod: Bool = false
+}
+
+struct SavedDayEntry: Codable {
+    var date: Date
+    var entry: DayEntry
 }
 
 // MARK: - Calendar Day Cell
