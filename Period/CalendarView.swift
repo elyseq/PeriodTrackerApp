@@ -26,6 +26,32 @@ struct CalendarView: View {
         ZStack {
             VStack(spacing: 16) {
                 headerView
+                
+                if let nextPeriod = predictedNextPeriodStart() {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Predictions")
+                            .font(.headline)
+
+                        Text("Next period: \(shortDateString(nextPeriod))")
+                            .font(.subheadline)
+
+                        if let ovulation = predictedOvulationDate() {
+                            Text("Estimated ovulation: \(shortDateString(ovulation))")
+                                .font(.subheadline)
+                        }
+
+                        if let cycleLength = averageCycleLength() {
+                            Text("Average cycle length: \(cycleLength) days")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color.white.opacity(0.7))
+                    .cornerRadius(14)
+                    .padding(.horizontal)
+                }
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(weekdaySymbols, id: \.self) { weekday in
@@ -59,6 +85,17 @@ struct CalendarView: View {
                 Spacer()
             }
             .padding(.top)
+            .overlay(alignment: .bottomTrailing) {
+                Button("Cycle Information") {
+                    showCycleInfo = true
+                }
+                .padding()
+                .background(Color.purple.opacity(0.1))
+                .cornerRadius(50)
+                .padding()
+                .offset(y: 20)
+                .buttonStyle(.plain)
+            }
 
             if showingEditor, let selectedDate {
                 Color.black.opacity(0.25)
@@ -78,16 +115,6 @@ struct CalendarView: View {
                 .transition(.scale)
                 .zIndex(1)
             }
-            
-            Button ("Cycle Facts") {
-                showCycleInfo = true
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
-            .background(Color.purple.opacity(0.1))
-            .buttonStyle(.plain)
-            .cornerRadius(50)
-            .offset(x: 80, y: 370)
             
             if showCycleInfo {
                 CycleInfoEditorView(onClose: {
@@ -233,6 +260,73 @@ struct CalendarView: View {
         } catch {
             print("Failed to load entries: \(error)")
         }
+    }
+    
+    func periodStartDates() -> [Date] {
+        let periodDates = entries
+            .filter { $0.value.hasPeriod }
+            .map { normalizedDate($0.key) }
+            .sorted()
+
+        guard !periodDates.isEmpty else { return [] }
+
+        var starts: [Date] = []
+        for i in 0..<periodDates.count {
+            let current = periodDates[i]
+
+            if i == 0 {
+                starts.append(current)
+            } else {
+                let previous = periodDates[i - 1]
+                let difference = calendar.dateComponents([.day], from: previous, to: current).day ?? 0
+
+                // treat a date as a new period start if it is not part of the same period block
+                if difference > 1 {
+                    starts.append(current)
+                }
+            }
+        }
+
+        return starts
+    }
+    
+    func averageCycleLength() -> Int? {
+        let starts = periodStartDates()
+        guard starts.count >= 2 else { return nil }
+
+        var gaps: [Int] = []
+
+        for i in 1..<starts.count {
+            let days = calendar.dateComponents([.day], from: starts[i - 1], to: starts[i]).day ?? 0
+            if days >= 15 && days <= 60 {
+                gaps.append(days)
+            }
+        }
+
+        guard !gaps.isEmpty else { return nil }
+        return gaps.reduce(0, +) / gaps.count
+    }
+    
+    func predictedNextPeriodStart() -> Date? {
+        guard
+            let cycleLength = averageCycleLength(),
+            let lastStart = periodStartDates().last
+        else {
+            return nil
+        }
+
+        return calendar.date(byAdding: .day, value: cycleLength, to: lastStart)
+    }
+    
+    func predictedOvulationDate() -> Date? {
+        guard let nextPeriod = predictedNextPeriodStart() else { return nil }
+        return calendar.date(byAdding: .day, value: -14, to: nextPeriod)
+    }
+    
+    func shortDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
     
 }
@@ -417,9 +511,6 @@ struct StickyNoteEditorView: View {
             }
 
             Button {
-//                existingEntry.note = ""
-//                existingEntry.symptoms.removeAll()
-//                existingEntry.hasPeriod = false
                 onClose()
 
             } label: {
