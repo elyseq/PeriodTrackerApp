@@ -11,47 +11,28 @@ struct CalendarView: View {
     @State private var displayedMonth = Date()
     @State private var selectedDate: Date? = nil
     @State private var showingEditor = false
-
-    // Stores info for each day
     @State private var entries: [Date: DayEntry] = [:]
-    
     @State private var showCycleInfo = false
+    @State private var showPredictions = false
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
     private let weekdaySymbols = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     private let storageKey = "savedPeriodEntries"
+    
+    var predictionCalculator: CyclePredictionCalculator {
+        CyclePredictionCalculator(calendar: calendar)
+    }
+
+    var prediction: CyclePrediction {
+        predictionCalculator.makePrediction(from: entries)
+    }
 
     var body: some View {
         ZStack {
+            
             VStack(spacing: 16) {
                 headerView
-                
-                if let nextPeriod = predictedNextPeriodStart() {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Predictions")
-                            .font(.headline)
-
-                        Text("Next period: \(shortDateString(nextPeriod))")
-                            .font(.subheadline)
-
-                        if let ovulation = predictedOvulationDate() {
-                            Text("Estimated ovulation: \(shortDateString(ovulation))")
-                                .font(.subheadline)
-                        }
-
-                        if let cycleLength = averageCycleLength() {
-                            Text("Average cycle length: \(cycleLength) days")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(Color.white.opacity(0.7))
-                    .cornerRadius(14)
-                    .padding(.horizontal)
-                }
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(weekdaySymbols, id: \.self) { weekday in
@@ -68,7 +49,8 @@ struct CalendarView: View {
                                 isToday: calendar.isDateInToday(date),
                                 hasEntry: hasEntry(for: date),
                                 hasPeriod: hasPeriod(on: date),
-                                dayNumber: dayNumber(from: date)
+                                dayNumber: dayNumber(from: date),
+                                isPredictedPeriod: prediction.predictedPeriodDates.contains(normalizedDate(date)),
                             ) {
                                 selectedDate = date
                                 showingEditor = true
@@ -86,7 +68,7 @@ struct CalendarView: View {
             }
             .padding(.top)
             .overlay(alignment: .bottomTrailing) {
-                Button("Cycle Information") {
+                Button("Cycle Info") {
                     showCycleInfo = true
                 }
                 .padding()
@@ -95,6 +77,17 @@ struct CalendarView: View {
                 .padding()
                 .offset(y: 20)
                 .buttonStyle(.plain)
+            }
+            .overlay(alignment: .bottomLeading) {
+                    Button("Predictions") {
+                        showPredictions = true
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(50)
+                    .buttonStyle(.plain)
+                .padding()
+                .offset(y: 20)
             }
 
             if showingEditor, let selectedDate {
@@ -116,10 +109,40 @@ struct CalendarView: View {
                 .zIndex(1)
             }
             
+//            if showCycleInfo {
+//                
+//                CycleInfoEditorView(onClose: {
+//                    showCycleInfo = false
+//                })
+//            }
+            
             if showCycleInfo {
-                CycleInfoEditorView(onClose: {
-                    showCycleInfo = false
-                })
+                Color.black.opacity(0.25)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showCycleInfo = false
+                    }
+
+                CycleInfoEditorView(
+                    onClose: {
+                        showCycleInfo = false
+                    }
+                )
+            }
+            
+            if showPredictions {
+                Color.black.opacity(0.25)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        showPredictions = false
+                    }
+
+                PredictionEditorView(
+                    prediction: prediction,
+                    onClose: {
+                        showPredictions = false
+                    }
+                )
             }
         }
         .animation(.easeInOut, value: showingEditor)
@@ -354,6 +377,7 @@ struct DayCellView: View {
     let hasEntry: Bool
     let hasPeriod: Bool
     let dayNumber: String
+    let isPredictedPeriod: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -366,7 +390,7 @@ struct DayCellView: View {
 
                 if hasEntry && !hasPeriod{
                     Circle()
-                        .fill(hasPeriod ? Color.red : Color.pink.opacity(0.5))
+                        .fill(Color.pink.opacity(0.5))
                         .frame(width: 7, height: 7)
                 } else {
                     Circle()
@@ -374,15 +398,13 @@ struct DayCellView: View {
                         .frame(width: 7, height: 7)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 101) //edit sizes of boxes here
+//            .frame(maxWidth: .infinity, minHeight: 101) //edit sizes of boxes here
+            .frame(maxWidth: .infinity, minHeight: 96) //edit sizes of boxes here
             .background(backgroundColor) //change background of current day
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(borderColor, lineWidth: borderWidth)
             )
-//            if isToday{
-//                .border(Color.blue, width: 4)
-//            }
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
@@ -393,7 +415,10 @@ struct DayCellView: View {
             return Color.red.opacity(0.25) //change background if period day
         } else if isToday {
             return Color.blue.opacity(0.25)
-        } else {
+        } else if isPredictedPeriod{
+            return Color.yellow.opacity(0.25)
+        }
+        else {
             return Color.gray.opacity(0.08)
         }
     }
@@ -423,7 +448,6 @@ struct StickyNoteEditorView: View {
     let onClose: () -> Void
 
     let symptomOptions = [
-//        "Period",
         "Cramps",
         "Headache",
         "Bloating",
@@ -449,7 +473,6 @@ struct StickyNoteEditorView: View {
                     existingEntry.note = ""
                     existingEntry.symptoms.removeAll()
                     existingEntry.hasPeriod = false
-//                    onClose()
                 }
                 .fontWeight(.semibold)
                 .tint(.red)
@@ -548,66 +571,401 @@ struct StickyNoteEditorView: View {
             
 }
 
+// MARK: - Cycle Fact View
+
+//struct CycleInfoEditorView: View {
+//    let onClose: () -> Void
+//
+//    var body: some View {
+//        VStack(alignment: .leading, spacing: 16) {
+//            HStack {
+////                Spacer()
+//
+//                Button("Done") {
+//                    onClose()
+//                }
+//                .fontWeight(.semibold)
+//                .offset(x: 265)
+//            }
+//
+//            Text("Cycle Information")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//
+//            Text("The menstrual cycle typically lasts for 21-35 days and has 4 main cycles- menstruation, follicular, ovulation, and luteal")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//            
+//            Text("Menstruation- ")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//            
+//            Text("Uterine lining sheds, causing bleeding. Usually lasts 3-7 days \n")
+//                .font(.subheadline)
+//            
+//            Text("Follicular- ")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+////                .font(.custom("Arial Rounded MT Bold", size: 18))
+////                .font(.custom("Times New Roman", size: 18))
+//            
+//            Text("Starts on the first day of your period and lasts for 13-14 days. The last day of this phase is ovulation. \n")
+//                .font(.subheadline)
+//            
+//            Text("Ovulation- ")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//            
+//            Text("Happens once a month, about 2 weeks before your next period, on the last day of follucular. This is when you are most likely to get pregnant \n")
+//                .font(.subheadline)
+//            
+//            Text("Luteal- ")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//            
+//            Text("This is when- \n")
+//                .font(.subheadline)
+//        }
+//        .padding(20)
+//        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
+//        .background(Color.pink.brightness(0.8))
+//        //.background(Color.brown.brightness(0.2)) //color for pop-up
+//        .cornerRadius(18)
+//        .shadow(radius: 12)
+//        .frame(maxWidth: 350)
+//    }
+//}
+
 struct CycleInfoEditorView: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Spacer()
+
+                    Button("Done") {
+                        onClose()
+                    }
+                    .fontWeight(.semibold)
+                }
+
+                Text("Cycle Information")
+                    .font(.headline)
+
+                Text("The menstrual cycle typically lasts for 21-35 days and has 4 main phases: menstruation, follicular, ovulation, and luteal.")
+                    .font(.subheadline)
+
+                Text("Menstruation")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("The uterine lining sheds, causing bleeding. This usually lasts 3-7 days.")
+                    .font(.subheadline)
+
+                Text("Follicular")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("This starts on the first day of your period and lasts until ovulation.")
+                    .font(.subheadline)
+
+                Text("Ovulation")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("This usually happens about 2 weeks before the next period.")
+                    .font(.subheadline)
+
+                Text("Luteal")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("This is the phase after ovulation and before the next period begins.")
+                    .font(.subheadline)
+            }
+            .padding(20)
+        }
+        .background(Color.pink.brightness(0.8))
+        .cornerRadius(18)
+        .shadow(radius: 12)
+        .frame(maxWidth: 350, maxHeight: 500)
+    }
+}
+
+// MARK: - Prediction View
+
+//struct PredictionEditorView: View {
+//
+//    var body: some View {
+//        VStack(alignment: .leading, spacing: 16) {
+//            HStack {
+//                Text("My period Information & Predictions")
+//                    .font(.headline)
+//                
+//                if let nextPeriod = predictedNextPeriodStart() {
+//                    VStack(alignment: .leading, spacing: 6) {
+//                        Text("Predictions")
+//                            .font(.headline)
+//
+//                        Text("Next period: \(shortDateString(nextPeriod))")
+//                            .font(.subheadline)
+//
+//                        if let ovulation = predictedOvulationDate() {
+//                            Text("Estimated ovulation: \(shortDateString(ovulation))")
+//                                .font(.subheadline)
+//                        }
+//
+//                        if let cycleLength = averageCycleLength() {
+//                            Text("Average cycle length: \(cycleLength) days")
+//                                .font(.caption)
+//                                .foregroundColor(.secondary)
+//                        }
+//                    }
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                    .padding()
+//                    .background(Color.white.opacity(0.7))
+//                    .cornerRadius(14)
+//                    .padding(.horizontal)
+//                }
+//
+//                Spacer()
+//
+//            }
+//
+//            Text("Symptoms")
+//                .font(.subheadline)
+//                .fontWeight(.semibold)
+//
+//            Button {
+//                onClose()
+//
+//            } label: {
+//                Text("Done")
+//                    .frame(maxWidth: .infinity)
+//                    .padding()
+//                    .background(Color.red.opacity(0.15))
+//                    .cornerRadius(12)
+//            }
+//            .buttonStyle(.plain)
+//
+//        }
+//        .padding(20)
+//        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
+//        .background(Color.pink.brightness(0.8))
+//        //.background(Color.brown.brightness(0.2)) //color for pop-up
+//        .cornerRadius(18)
+//        .shadow(radius: 12)
+//        .frame(maxWidth: 350)
+//    }
+//            
+//}
+//
+struct CyclePrediction {
+    let nextPeriodStart: Date?
+    let ovulationDate: Date?
+    let averageCycleLength: Int?
+    let predictedPeriodDates: Set<Date>
+}
+
+struct CyclePredictionCalculator {
+    let calendar: Calendar
+
+    func normalizedDate(_ date: Date) -> Date {
+        calendar.startOfDay(for: date)
+    }
+
+    func periodStartDates(from entries: [Date: DayEntry]) -> [Date] {
+        let periodDates = entries
+            .filter { $0.value.hasPeriod }
+            .map { normalizedDate($0.key) }
+            .sorted()
+
+        guard !periodDates.isEmpty else { return [] }
+
+        var starts: [Date] = []
+
+        for i in 0..<periodDates.count {
+            let current = periodDates[i]
+
+            if i == 0 {
+                starts.append(current)
+            } else {
+                let previous = periodDates[i - 1]
+                let difference = calendar.dateComponents([.day], from: previous, to: current).day ?? 0
+
+                if difference > 1 {
+                    starts.append(current)
+                }
+            }
+        }
+
+        return starts
+    }
+
+    func averageCycleLength(from entries: [Date: DayEntry]) -> Int? {
+        let starts = periodStartDates(from: entries)
+        guard starts.count >= 2 else { return nil }
+
+        var gaps: [Int] = []
+
+        for i in 1..<starts.count {
+            let days = calendar.dateComponents([.day], from: starts[i - 1], to: starts[i]).day ?? 0
+            if days >= 15 && days <= 60 {
+                gaps.append(days)
+            }
+        }
+
+        guard !gaps.isEmpty else { return nil }
+        return gaps.reduce(0, +) / gaps.count
+    }
+
+    func predictedNextPeriodStart(from entries: [Date: DayEntry]) -> Date? {
+        guard
+            let cycleLength = averageCycleLength(from: entries),
+            let lastStart = periodStartDates(from: entries).last
+        else {
+            return nil
+        }
+
+        return calendar.date(byAdding: .day, value: cycleLength, to: lastStart)
+    }
+
+    func predictedOvulationDate(from entries: [Date: DayEntry]) -> Date? {
+        guard let nextPeriod = predictedNextPeriodStart(from: entries) else { return nil }
+        return calendar.date(byAdding: .day, value: -14, to: nextPeriod)
+    }
+
+    func predictedPeriodDates(from entries: [Date: DayEntry], periodLength: Int = 5) -> Set<Date> {
+        guard let nextStart = predictedNextPeriodStart(from: entries) else { return [] }
+
+        var dates = Set<Date>()
+        for offset in 0..<periodLength {
+            if let date = calendar.date(byAdding: .day, value: offset, to: nextStart) {
+                dates.insert(normalizedDate(date))
+            }
+        }
+        return dates
+    }
+
+    func makePrediction(from entries: [Date: DayEntry]) -> CyclePrediction {
+        let nextPeriod = predictedNextPeriodStart(from: entries)
+        let ovulation = predictedOvulationDate(from: entries)
+        let average = averageCycleLength(from: entries)
+        let predictedDates = predictedPeriodDates(from: entries)
+
+        return CyclePrediction(
+            nextPeriodStart: nextPeriod,
+            ovulationDate: ovulation,
+            averageCycleLength: average,
+            predictedPeriodDates: predictedDates
+        )
+    }
+}
+
+struct PredictionEditorView: View {
+    let prediction: CyclePrediction
     let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-//                Spacer()
+                Text("My Period Information & Predictions")
+                    .font(.headline)
+
+                Spacer()
 
                 Button("Done") {
                     onClose()
                 }
                 .fontWeight(.semibold)
-                .offset(x: 265)
             }
+            
+            VStack(alignment: .leading, spacing: 10) {
+                if let nextPeriod = prediction.nextPeriodStart {
+                    Text("Predictions")
+                        .font(.headline)
+                    
+                    Text("Next period: \(shortDateString(nextPeriod))")
+                        .font(.subheadline)
+                    
+                    if let ovulation = prediction.ovulationDate {
+                        Text("Estimated ovulation: \(shortDateString(ovulation))")
+                            .font(.subheadline)
+                    }
+                    
+                    if let cycleLength = prediction.averageCycleLength {
+                        Text("Average cycle length: \(cycleLength) days")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                } else {
+                    Text("Log at least 2 periods to see predictions.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding()
+                        //.frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.7))
+                        .cornerRadius(14)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color.white.opacity(0.7))
+            .cornerRadius(14)
 
-            Text("Cycle Information")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-
-            Text("The menstrual cycle typically lasts for 21-35 days and has 4 main cycles- menstruation, follicular, ovulation, and luteal")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            Text("Menstruation- ")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            Text("Uterine lining sheds, causing bleeding. Usually lasts 3-7 days \n")
-                .font(.subheadline)
-            
-            Text("Follicular- ")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-//                .font(.custom("Arial Rounded MT Bold", size: 18))
-//                .font(.custom("Times New Roman", size: 18))
-            
-            Text("Starts on the first day of your period and lasts for 13-14 days. The last day of this phase is ovulation. \n")
-                .font(.subheadline)
-            
-            Text("Ovulation- ")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            Text("Happens once a month, about 2 weeks before your next period, on the last day of follucular. This is when you are most likely to get pregnant \n")
-                .font(.subheadline)
-            
-            Text("Luteal- ")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-            
-            Text("This is when- \n")
-                .font(.subheadline)
+//            if let nextPeriod = prediction.nextPeriodStart {
+//                VStack(alignment: .leading, spacing: 10) {
+//                    Text("Predictions")
+//                        .font(.headline)
+//
+//                    Text("Next period: \(shortDateString(nextPeriod))")
+//                        .font(.subheadline)
+//
+//                    if let ovulation = prediction.ovulationDate {
+//                        Text("Estimated ovulation: \(shortDateString(ovulation))")
+//                            .font(.subheadline)
+//                    }
+//
+//                    if let cycleLength = prediction.averageCycleLength {
+//                        Text("Average cycle length: \(cycleLength) days")
+//                            .font(.caption)
+//                            .foregroundColor(.secondary)
+//                    }
+//                }
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//                .padding()
+//                .background(Color.white.opacity(0.7))
+//                .cornerRadius(14)
+//            } else {
+//                VStack(alignment: .leading, spacing: 10) {
+//                    Text("Log at least 2 periods to see predictions.")
+//                        .font(.subheadline)
+//                        .foregroundColor(.secondary)
+//                        .padding()
+//                        .frame(maxWidth: .infinity, alignment: .leading)
+//                        .background(Color.white.opacity(0.7))
+//                        .cornerRadius(14)
+//                }
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//                .padding()
+//                .background(Color.white.opacity(0.7))
+//                .cornerRadius(14)
+//            }
         }
         .padding(20)
-        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
         .background(Color.pink.brightness(0.8))
-        //.background(Color.brown.brightness(0.2)) //color for pop-up
         .cornerRadius(18)
         .shadow(radius: 12)
         .frame(maxWidth: 350)
+    }
+
+    func shortDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: date)
     }
 }
 
