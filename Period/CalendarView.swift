@@ -153,6 +153,20 @@ struct CalendarView: View {
         .onChange(of: entries) {
             saveEntries()
         }
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    if value.translation.width < -50 {
+                        if let newMonth = calendar.date(byAdding: .month, value: 1, to: displayedMonth) {
+                            displayedMonth = newMonth
+                        }
+                    } else if value.translation.width > 50 {
+                        if let newMonth = calendar.date(byAdding: .month, value: -1, to: displayedMonth) {
+                            displayedMonth = newMonth
+                        }
+                    }
+                }
+        )
         
     }
 
@@ -401,6 +415,7 @@ struct DayCellView: View {
             }
 //            .frame(maxWidth: .infinity, minHeight: 101) //edit sizes of boxes here
             .frame(maxWidth: .infinity, minHeight: 96) //edit sizes of boxes here
+//            .frame(maxWidth: .infinity, minHeight: 72) //also works visually
             .background(backgroundColor) //change background of current day
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
