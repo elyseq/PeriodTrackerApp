@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct Calendar: View {
+struct CalendarView: View {
 //    @State private var currentMonth = Date()
 //        let calendar = Calendar.current
 //
@@ -77,6 +77,8 @@ struct Calendar: View {
 
     // Stores info for each day
     @State private var entries: [Date: DayEntry] = [:]
+    
+    @State private var showCycleInfo = false
 
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible()), count: 7)
@@ -101,6 +103,7 @@ struct Calendar: View {
                                 date: date,
                                 isToday: calendar.isDateInToday(date),
                                 hasEntry: hasEntry(for: date),
+                                hasPeriod: hasPeriod(on: date),
                                 dayNumber: dayNumber(from: date)
                             ) {
                                 selectedDate = date
@@ -136,6 +139,22 @@ struct Calendar: View {
                 .padding()
                 .transition(.scale)
                 .zIndex(1)
+            }
+            
+            Button ("Cycle Facts") {
+                showCycleInfo = true
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .background(Color.purple.opacity(0.1))
+            .buttonStyle(.plain)
+            .cornerRadius(50)
+            .offset(x: 80, y: 370)
+            
+            if showCycleInfo {
+                CycleInfoEditorView(onClose: {
+                    showCycleInfo = false
+                })
             }
         }
         .animation(.easeInOut, value: showingEditor)
@@ -210,6 +229,11 @@ struct Calendar: View {
         return dates
     }
 
+    func hasPeriod(on date: Date) -> Bool {
+        let key = normalizedDate(date)
+        return entries[key]?.hasPeriod ?? false
+    }
+    
     func monthYearString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
@@ -228,7 +252,7 @@ struct Calendar: View {
     func hasEntry(for date: Date) -> Bool {
         let key = normalizedDate(date)
         guard let entry = entries[key] else { return false }
-        return !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !entry.symptoms.isEmpty
+        return entry.hasPeriod || !entry.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !entry.symptoms.isEmpty
     }
 
     func bindingForDate(_ date: Date) -> Binding<DayEntry> {
@@ -250,6 +274,7 @@ struct Calendar: View {
 struct DayEntry: Equatable {
     var note: String = ""
     var symptoms: Set<String> = []
+    var hasPeriod: Bool = false
 }
 
 // MARK: - Calendar Day Cell
@@ -258,6 +283,7 @@ struct DayCellView: View {
     let date: Date
     let isToday: Bool
     let hasEntry: Bool
+    let hasPeriod: Bool
     let dayNumber: String
     let onTap: () -> Void
 
@@ -269,9 +295,9 @@ struct DayCellView: View {
                     .fontWeight(isToday ? .bold : .regular)
                     .foregroundColor(.primary)
 
-                if hasEntry {
+                if hasEntry && !hasPeriod{
                     Circle()
-                        .fill(Color.pink.opacity(0.5)) //color of system mark circle
+                        .fill(hasPeriod ? Color.red : Color.pink.opacity(0.5))
                         .frame(width: 7, height: 7)
                 } else {
                     Circle()
@@ -280,10 +306,43 @@ struct DayCellView: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 101) //edit sizes of boxes here
-            .background(isToday ? Color.blue.opacity(0.25) : Color.gray.opacity(0.08)) //change background of current day
+            .background(backgroundColor) //change background of current day
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(borderColor, lineWidth: borderWidth)
+            )
+//            if isToday{
+//                .border(Color.blue, width: 4)
+//            }
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
+    }
+
+    var backgroundColor: Color {
+        if hasPeriod {
+            return Color.red.opacity(0.25) //change background if period day
+        } else if isToday {
+            return Color.blue.opacity(0.25)
+        } else {
+            return Color.gray.opacity(0.08)
+        }
+    }
+    
+    var borderColor: Color {
+        if hasPeriod && isToday {
+            return Color.blue.opacity(0.35) //change border color if period day & today (to make today clear when background is pink)
+        } else {
+            return Color.purple.opacity(0.35)
+        }
+    }
+    
+    var borderWidth: CGFloat {
+        if hasPeriod && isToday {
+            return  5 //change border lineWidth size if period day & today
+        } else {
+            return 1
+        }
     }
 }
 
@@ -295,7 +354,7 @@ struct StickyNoteEditorView: View {
     let onClose: () -> Void
 
     let symptomOptions = [
-        "Period",
+//        "Period",
         "Cramps",
         "Headache",
         "Bloating",
@@ -317,10 +376,14 @@ struct StickyNoteEditorView: View {
 
                 Spacer()
 
-                Button("Done") {
-                    onClose()
+                Button("Clear Day") {
+                    existingEntry.note = ""
+                    existingEntry.symptoms.removeAll()
+                    existingEntry.hasPeriod = false
+//                    onClose()
                 }
                 .fontWeight(.semibold)
+                .tint(.red)
             }
 
             Text("Notes")
@@ -336,6 +399,26 @@ struct StickyNoteEditorView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(Color.purple.opacity(0.35), lineWidth: 1)
                 )
+            
+            Text("Period")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Button {
+                existingEntry.hasPeriod.toggle()
+            } label: {
+                HStack {
+                    Image(systemName: existingEntry.hasPeriod ? "drop.fill" : "drop")
+                    Text(existingEntry.hasPeriod ? "Period Logged" : "Mark as Period Day")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(existingEntry.hasPeriod ? Color.red.opacity(0.3) : Color.white.opacity(0.75))
+                .foregroundColor(.primary)
+                .cornerRadius(12)
+            }
+            .buttonStyle(.plain)
 
             Text("Symptoms")
                 .font(.subheadline)
@@ -359,10 +442,13 @@ struct StickyNoteEditorView: View {
             }
 
             Button {
-                existingEntry.note = ""
-                existingEntry.symptoms.removeAll()
+//                existingEntry.note = ""
+//                existingEntry.symptoms.removeAll()
+//                existingEntry.hasPeriod = false
+                onClose()
+
             } label: {
-                Text("Clear This Day")
+                Text("Done")
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.red.opacity(0.15))
@@ -396,6 +482,69 @@ struct StickyNoteEditorView: View {
             
 }
 
+struct CycleInfoEditorView: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+//                Spacer()
+
+                Button("Done") {
+                    onClose()
+                }
+                .fontWeight(.semibold)
+                .offset(x: 265)
+            }
+
+            Text("Cycle Information")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            Text("The menstrual cycle typically lasts for 21-35 days and has 4 main cycles- menstruation, follicular, ovulation, and luteal")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            
+            Text("Menstruation- ")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            
+            Text("Uterine lining sheds, causing bleeding. Usually lasts 3-7 days \n")
+                .font(.subheadline)
+            
+            Text("Follicular- ")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+//                .font(.custom("Arial Rounded MT Bold", size: 18))
+//                .font(.custom("Times New Roman", size: 18))
+            
+            Text("Starts on the first day of your period and lasts for 13-14 days. The last day of this phase is ovulation. \n")
+                .font(.subheadline)
+            
+            Text("Ovulation- ")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            
+            Text("Happens once a month, about 2 weeks before your next period, on the last day of follucular. This is when you are most likely to get pregnant \n")
+                .font(.subheadline)
+            
+            Text("Luteal- ")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            
+            Text("This is when- \n")
+                .font(.subheadline)
+        }
+        .padding(20)
+        //.background(Color(red: 1.0, green: 0.97, blue: 0.72))
+        .background(Color.pink.brightness(0.8))
+        //.background(Color.brown.brightness(0.2)) //color for pop-up
+        .cornerRadius(18)
+        .shadow(radius: 12)
+        .frame(maxWidth: 350)
+    }
+}
+
 #Preview {
-    Calendar()
+    CalendarView()
 }

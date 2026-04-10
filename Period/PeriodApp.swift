@@ -25,7 +25,8 @@ struct PeriodApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            CalendarView()
+//            ContentView()
         }
         .modelContainer(sharedModelContainer)
     }
