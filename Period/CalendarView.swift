@@ -63,6 +63,7 @@ struct CalendarView: View {
                     }
                 }
                 .padding(.horizontal)
+                .padding(.bottom, 40) //works on all screens so far
 
                 Spacer()
             }
