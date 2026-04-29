@@ -537,11 +537,17 @@ struct StickyNoteEditorView: View {
                 TextEditor(text: $existingEntry.note)
                     .frame(height: 120)
                     .padding(8)
-//                if colorScheme == .dark{
-//                    .background(Color(.systemBackground))
-//                } else {
-//                    
-//                }
+//                    .background(colorScheme == .dark ? Color.black : Color.pink.opacity(0.3))
+//                    .background(
+//                        Group {
+//                            if colorScheme == .dark {
+//                                Color.black
+//                            } else {
+//                                Color.pink.brightness(0.8)
+//                            }
+//                        }
+//                    )
+                    //.background(Color(.systemBackground))
                     .background(Color(.systemBackground))
                     .cornerRadius(10)
                     .overlay(
